@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src blob:; style-src 'self'; img-src 'self' data:; connect-src wss: ws://localhost:* ws://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0f1419">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<title>Termostat</title>
+</head>
+<body>
+<section id="login" hidden>
+  <h1>Termostat</h1>
+  <form id="loginForm" autocomplete="on">
+    <label>Broker (wss://…)<input id="url" required placeholder="wss://xxxx.ala.eu-central-1.emqxsl.com:8084/mqtt" autocomplete="url"></label>
+    <label>Korisnik<input id="user" required autocomplete="username"></label>
+    <label>Lozinka<input id="pass" type="password" required autocomplete="current-password"></label>
+    <label>ID uređaja<input id="devid" required value="kuca"></label>
+    <label class="inline"><input id="remember" type="checkbox"> Zapamti lozinku na ovom uređaju</label>
+    <button class="primary">Spoji</button>
+    <p id="loginErr" class="err" role="alert"></p>
+  </form>
+</section>
+
+<main id="app" hidden>
+  <header>
+    <span id="dot" class="dot"></span><span id="conn">Spajanje…</span>
+    <span class="spacer"></span><span id="clock"></span>
+  </header>
+  <nav id="tabs" role="tablist">
+    <button data-tab="home" class="on">Početna</button>
+    <button data-tab="sched">Raspored</button>
+    <button data-tab="stats">Statistika</button>
+    <button data-tab="set">Postavke</button>
+  </nav>
+
+  <section id="tab-home">
+    <div class="dial">
+      <svg id="dialSvg" viewBox="0 0 240 240" role="img" aria-label="Temperatura"></svg>
+      <div class="dialText">
+        <div id="tNow" class="big">--.-</div>
+        <div id="tTarget" class="sub">zadano --</div>
+        <div id="tLine" class="sub"></div>
+        <div id="hLine" class="sub"></div>
+      </div>
+    </div>
+    <div class="row center">
+      <button id="minus" class="round" aria-label="Manje">−</button>
+      <button id="plus" class="round" aria-label="Više">+</button>
+    </div>
+    <div class="seg" id="modes">
+      <button data-mode="2">Auto</button><button data-mode="1">Ručno</button><button data-mode="0">Isklj</button>
+    </div>
+    <div class="grid">
+      <button id="boost">Pojačaj 1 h</button>
+      <button id="away">Odsutan</button>
+      <button id="acOn">Klima uklj</button>
+      <button id="acOff">Klima isklj</button>
+    </div>
+    <div id="awayBox" class="card" hidden>
+      <label>Odsutan do datuma<input id="awayDate" type="date"></label>
+      <div class="row"><button id="awayGo" class="primary">Uključi</button><button id="awayInf">Do otkazivanja</button></div>
+    </div>
+    <p id="flags" class="muted"></p>
+  </section>
+
+  <section id="tab-sched" hidden>
+    <div class="seg" id="dayTabs"></div>
+    <div id="blocks"></div>
+    <div class="row"><button id="addBlock">Dodaj blok</button><button id="copyDay">Kopiraj na sve dane</button></div>
+    <h3>Temperature predložaka</h3>
+    <div class="row presets">
+      <label>Udobno<input id="p0" type="number" step="0.5" min="5" max="30"></label>
+      <label>Eko<input id="p1" type="number" step="0.5" min="5" max="30"></label>
+      <label>Antifriz<input id="p2" type="number" step="0.5" min="5" max="30"></label>
+    </div>
+    <button id="saveSched" class="primary">Spremi na termostat</button>
+    <p id="schedMsg" class="muted" role="status"></p>
+  </section>
+
+  <section id="tab-stats" hidden>
+    <h3>Zadnja 24 h</h3>
+    <svg id="histSvg" viewBox="0 0 340 160" role="img" aria-label="Graf temperature"></svg>
+    <h3>Rad grijanja (sati)</h3>
+    <svg id="runSvg" viewBox="0 0 340 130" role="img" aria-label="Sati rada grijanja"></svg>
+    <p id="rateLine" class="muted"></p>
+  </section>
+
+  <section id="tab-set" hidden>
+    <div class="card">
+      <h3>Sat termostata</h3>
+      <p id="clockInfo" class="muted"></p>
+      <button id="setTime">Postavi sat s ovog uređaja</button>
+      <button id="calTouch">Kalibriraj dodir na termostatu</button>
+      <p class="muted">Termostat se sam sinkronizira s NTP poslužiteljem i upisuje vrijeme u RTC čip. Ručno postavljanje treba samo bez interneta.</p>
+    </div>
+    <div class="card">
+      <h3>Veza</h3>
+      <p id="linkInfo" class="muted"></p>
+      <button id="logout">Odjava</button>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="vendor/mqtt.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
