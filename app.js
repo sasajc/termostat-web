@@ -124,6 +124,7 @@ function renderHome() {
   const f = [];
   if (!st.sensor) f.push("Senzor ne radi, grijanje je isključeno");
   if (!st.act) f.push("Nema veze s relejem kotla");
+  if (st.norise) f.push("Grije već 30 min, a temperatura ne raste: provjeri kotao");
   if (st.pre) f.push("Predgrijavanje je aktivno");
   if (st.ov) f.push("Privremena izmjena do sljedećeg bloka");
   $("flags").textContent = f.join(" · ");
