@@ -31,4 +31,6 @@ nav button.on{color:var(--fg);border-color:var(--acc)}
 .presets label{margin:0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:1}
+.pill{display:flex;align-items:center;gap:6px;margin-top:8px;padding:3px 12px;border-radius:20px;background:color-mix(in srgb,var(--eco) 16%,transparent);color:var(--eco);font-size:24px;font-weight:600}
+.pill svg{width:18px;height:18px;fill:currentColor}
 svg text{fill:var(--muted);font-size:10px}

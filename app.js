@@ -12,7 +12,7 @@ let client = null, base = "", online = false;
 let st = null;                 // last state message
 let sched = null;              // [7][] of {m, p}
 let presets = [21, 18, 7];
-let hist = null, stats = null;
+let hist = null, histH = null, stats = null, histM = "b";   // histM: t | h | b
 let curDay = new Date().getDay();
 let schedEdited = false;
 
@@ -83,6 +83,7 @@ function onMessage(sub, msg) {
     else if (sub === "sched") { const s = parseSched(msg); if (s && !schedEdited) { sched = s; renderSched(); } }
     else if (sub === "presets") { const p = msg.split(",").map(Number); if (p.length === 3 && !schedEdited) { presets = p; renderSched(); } }
     else if (sub === "hist") { const v = msg.split(",").map(Number); hist = { ts: v[0], v: v.slice(1) }; renderStats(); }
+    else if (sub === "histh") { const v = msg.split(",").map(Number); histH = { ts: v[0], v: v.slice(1) }; renderStats(); }
     else if (sub === "stats") { stats = msg.split(",").map(Number); renderStats(); }
   } catch (e) { /* ignore malformed message */ }
 }
@@ -111,7 +112,10 @@ function renderHome() {
   $("tNow").textContent = st.sensor ? st.t.toFixed(1) : "--.-";
   $("tTarget").textContent = st.mode === 0 ? "isključeno" : "zadano " + st.target.toFixed(1) + " °C";
   $("tLine").textContent = statusLine();
-  $("hLine").textContent = st.h + " %  ·  " + (st.heat ? "grije" : "miruje");
+  const hl = $("hLine"); hl.replaceChildren();
+  const drop = svgEl("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }); drop.append(svgEl("path", { d: "M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0C19 10 12 2 12 2z" }));
+  hl.append(drop, document.createTextNode(st.h + " %"));
+  $("hState").textContent = st.heat ? "grije" : "miruje";
   document.querySelectorAll("#modes button").forEach((b) => b.classList.toggle("on", Number(b.dataset.mode) === st.mode));
   $("boost").classList.toggle("on", st.boost > 0); $("boost").textContent = st.boost > 0 ? "Pojačanje " + st.boost + " min (isključi)" : "Pojačaj 1 h";
   $("away").classList.toggle("on", st.away > 0); $("away").textContent = st.away > 0 ? "Odsutan (otkaži)" : "Odsutan";
@@ -167,17 +171,33 @@ function edited() { schedEdited = true; $("schedMsg").textContent = "Nespremljen
 // ---------- statistics ----------
 function renderStats() {
   const h = $("histSvg"); h.replaceChildren();
-  if (hist && hist.v.length > 1) {
-    const v = hist.v, lo = Math.floor(Math.min(...v) - 0.5), hi = Math.ceil(Math.max(...v) + 0.5);
-    const x = (i) => 30 + i * 300 / Math.max(1, v.length - 1), y = (t) => 140 - (t - lo) / (hi - lo) * 120;
-    for (let t = lo; t <= hi; t++) { h.append(svgEl("line", { x1: 30, x2: 330, y1: y(t), y2: y(t), stroke: css("--line") })); h.append(svgEl("text", { x: 2, y: y(t) + 3 }, t + "°")); }
-    h.append(svgEl("polyline", { points: v.map((t, i) => x(i).toFixed(1) + "," + y(t).toFixed(1)).join(" "), fill: "none", stroke: css("--acc"), "stroke-width": 2 }));
-    const newest = hist.ts * 1000;
-    for (let i = 0; i < v.length; i += 36) {
-      const d = new Date(newest - (v.length - 1 - i) * 600000);
-      h.append(svgEl("text", { x: x(i) - 10, y: 155 }, pad(d.getHours()) + ":" + pad(d.getMinutes())));
+  document.querySelectorAll("#histMode button").forEach((b) => b.classList.toggle("on", b.dataset.m === histM));
+  const tv = hist && hist.v.length > 1 ? hist.v : null, hv = histH && histH.v.length > 1 ? histH.v : null;
+  const showT = histM !== "h" && tv, showH = histM !== "t" && hv;
+  const sum = [];
+  if (showT || showH) {
+    // x = age in 10-min steps from the right edge (143 steps = 24 h), so both series line up
+    const x = (i, n) => 330 - (n - 1 - i) * 300 / 143;
+    const ref = showT ? tv : hv, newest = (showT ? hist : histH).ts * 1000;
+    let lo = 0, hi = 1, hlo = 0, hhi = 1;
+    if (showT) { lo = Math.floor(Math.min(...tv) - 0.5); hi = Math.ceil(Math.max(...tv) + 0.5); }
+    if (showH) { hlo = Math.floor(Math.min(...hv) / 5) * 5 - 5; hhi = Math.ceil(Math.max(...hv) / 5) * 5 + 5; }
+    const yT = (t) => 140 - (t - lo) / (hi - lo) * 120, yH = (t) => 140 - (t - hlo) / (hhi - hlo) * 120;
+    for (let k = 0; k <= 4; k++) {
+      const y = 140 - k * 30; h.append(svgEl("line", { x1: 30, x2: 330, y1: y, y2: y, stroke: css("--line") }));
+      if (showT) h.append(svgEl("text", { x: 2, y: y + 3, fill: css("--acc") }, (lo + k * (hi - lo) / 4).toFixed(1) + "°"));
+      if (showH) h.append(svgEl("text", { x: showT ? 334 : 2, y: y + 3, fill: css("--eco") }, Math.round(hlo + k * (hhi - hlo) / 4) + "%"));
     }
-  } else h.append(svgEl("text", { x: 10, y: 80 }, "Još nema podataka (točka svakih 10 min)"));
+    const poly = (v, f, col) => h.append(svgEl("polyline", { points: v.map((t, i) => x(i, v.length).toFixed(1) + "," + f(t).toFixed(1)).join(" "), fill: "none", stroke: col, "stroke-width": 2 }));
+    if (showT) { poly(tv, yT, css("--acc")); sum.push("Temp. " + Math.min(...tv).toFixed(1) + "–" + Math.max(...tv).toFixed(1) + " °C"); }
+    if (showH) { poly(hv, yH, css("--eco")); sum.push("Vlaga " + Math.min(...hv) + "–" + Math.max(...hv) + " % (prosjek " + Math.round(hv.reduce((a, b) => a + b, 0) / hv.length) + " %)"); }
+    for (let i = 0; i < 144; i += 36) {
+      const j = ref.length - 1 - (143 - i); if (j < 0) continue;
+      const d = new Date(newest - (ref.length - 1 - j) * 600000);
+      h.append(svgEl("text", { x: x(j, ref.length) - 10, y: 160 }, pad(d.getHours()) + ":" + pad(d.getMinutes())));
+    }
+  } else h.append(svgEl("text", { x: 10, y: 80 }, histM === "h" ? "Vlaga: čeka se novi firmware / podaci" : "Još nema podataka (točka svakih 10 min)"));
+  $("histSum").textContent = sum.join("  ·  ");
   const r = $("runSvg"); r.replaceChildren();
   if (stats) {
     const hrs = stats.map((m) => m / 60), max = Math.max(1, ...hrs);
@@ -206,6 +226,7 @@ $("tabs").onclick = (e) => {
   for (const id of ["home", "sched", "stats", "set"]) $("tab-" + id).hidden = id !== t;
   if (t === "stats") renderStats();
 };
+$("histMode").onclick = (e) => { const m = e.target.dataset && e.target.dataset.m; if (m) { histM = m; renderStats(); } };
 $("modes").onclick = (e) => { const m = e.target.dataset && e.target.dataset.mode; if (m !== undefined) pub("mode", m); };
 $("minus").onclick = () => nudge(-0.5);
 $("plus").onclick = () => nudge(0.5);
